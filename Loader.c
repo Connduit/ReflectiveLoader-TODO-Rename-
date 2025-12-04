@@ -1,4 +1,4 @@
-/* ReflectiveLoader.c */
+/* Loader.c */
 /*
 1. Locate the PE headers
 2. allocate memory for the image
