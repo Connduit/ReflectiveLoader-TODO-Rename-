@@ -16,7 +16,9 @@
 // ReflectiveLoader() function that external stager calls
 // TODO: add #define DLLEXPORT __declspec(dllexport)
 __declspec(dllexport) DWORD WINAPI ReflectiveLoader(LPVOID param)
-{}
+{
+	return 0;
+}
 
 BOOL WINAPI DllMain(
     HINSTANCE hinstDLL,  // handle to DLL module

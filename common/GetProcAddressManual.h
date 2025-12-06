@@ -4,6 +4,6 @@
 // GetProcAddress by literal name
 // FARPROC GetProcAddressManual(PVOID pModule, LPCSTR lpProcName);
 // GetProcAddress by hash
-FARPROC GetProcAddressManual(HMODULE hModule, DWORD procHash);
+//FARPROC GetProcAddressManual(HMODULE hModule, DWORD procHash);
 
 #endif

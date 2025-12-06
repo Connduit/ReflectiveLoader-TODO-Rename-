@@ -4,6 +4,7 @@
 
 
 
+//extern "C"
 DWORD Rva2Offset(DWORD dwRva, UINT_PTR dllBaseAddress)
 {
 	WORD wIndex                          = 0; // TODO: rename to something like sIndex or sectionIndex maybe?
@@ -68,6 +69,7 @@ DWORD Rva2Offset(DWORD dwRva, UINT_PTR dllBaseAddress)
  *   NT Header == PE Header
  * */
 
+//extern "C"
 DWORD GetReflectiveLoaderOffset(VOID * lpReflectiveDllBuffer)
 {
 	UINT_PTR dllBaseAddress   = 0;
@@ -172,7 +174,7 @@ DWORD GetReflectiveLoaderOffset(VOID * lpReflectiveDllBuffer)
 }
 
 
-
+//extern "C"
 HANDLE WINAPI LoadLibraryManual(
 		HANDLE hProcess, 
 		LPVOID lpBuffer, 
@@ -186,43 +188,46 @@ HANDLE WINAPI LoadLibraryManual(
 	DWORD dwReflectiveLoaderOffset            = 0;
 	DWORD dwThreadId                          = 0;
 
-	__try
-	{
+	// __try
+	// {
+		// NOTE: do while loop is so break statements exit immeditly?
 		do
 		{
 			if( !hProcess  || !lpBuffer || !dwLength  )
 				break;
 
-			// check if the library has a ReflectiveLoader...
+			// check if the library (lpBuffer) has a function called ReflectiveLoader
 			dwReflectiveLoaderOffset = GetReflectiveLoaderOffset(lpBuffer);
 			if( !dwReflectiveLoaderOffset  )
 				break;
 
 			// alloc memory (RWX) in the host process for the image...
-			lpRemoteLibraryBuffer = VirtualAllocEx( hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE  );
+			lpRemoteLibraryBuffer = VirtualAllocEx(hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 			if( !lpRemoteLibraryBuffer  )
 				break;
 
 			// write the image into the host process...
-			if( !WriteProcessMemory( hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL  )  )
+			if( !WriteProcessMemory(hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL  )  )
 				break;
 
 			// add the offset to ReflectiveLoader() to the remote library address...
 			lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset  );
 
 			// create a remote thread in the host process to call the ReflectiveLoader!
-			hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId  );
+			// 1024*1024 bytes == 1MB which represents the stack size of the new thread
+			// if the parameter is 0, it will use the default stack size
+			hThread = CreateRemoteThread(hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
 
 
 		} while( 0  );
 
 
-	}
-	__except( EXCEPTION_EXECUTE_HANDLER  )
-	{
-		hThread = NULL;
-
-	}
+	// }
+	// __except( EXCEPTION_EXECUTE_HANDLER  )
+	// {
+	//     hThread = NULL;
+    //
+	// }
 
 	return hThread;
 

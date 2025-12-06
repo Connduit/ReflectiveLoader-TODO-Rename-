@@ -5,6 +5,6 @@
 // GetModuleHandle by literal name
 // HMODULE GetModuleHandleManual(LPCWSTR lpModuleName);
 // GetModuleHandle by hash
-HMODULE GetModuleHandleManual(DWORD moduleHash);
+//HMODULE GetModuleHandleManual(DWORD moduleHash);
 
 #endif
