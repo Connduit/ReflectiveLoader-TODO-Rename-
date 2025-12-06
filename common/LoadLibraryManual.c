@@ -108,12 +108,8 @@ DWORD GetReflectiveLoaderOffset( VOID * lpReflectiveDllBuffer  )
 
 	return 0;
 }
-}
-}
-}
-}
-}
-}
+
+
 
 HANDLE WINAPI LoadLibraryManual(
 		HANDLE hProcess, 
