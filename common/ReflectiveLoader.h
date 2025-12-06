@@ -4,6 +4,9 @@
 #ifndef REFLECTIVE_LOADER_H
 #define REFLECTIVE_LOADER_H
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h> // TODO: eventually remove
+
 typedef struct _UNICODE_STRING
 {
     USHORT Length;
@@ -89,5 +92,6 @@ typedef struct _PEB {
 // #define DEREF_32( name  )*(DWORD *)(name)
 // #define DEREF_16( name  )*(WORD *)(name)
 // #define DEREF_8( name  )*(BYTE *)(name)
+#define DLLEXPORT __declspec(dllexport)
 
 #endif

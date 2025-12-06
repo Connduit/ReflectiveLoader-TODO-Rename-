@@ -6,7 +6,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -O0 -g -Icommon
 LDFLAGS := -shared
 
 # === Directory structure ===
-SRC_DIRS := installer common
+SRC_DIRS := installer common loader
 OBJ_DIR := obj
 BIN_DIR := bin
 

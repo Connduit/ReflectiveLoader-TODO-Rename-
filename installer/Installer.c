@@ -2,9 +2,10 @@
 // LoadRemoteLibraryR() equivalent goes in here
 
 #include "LoadLibraryManual.h"
-#include "installer.h"
+#include "Installer.h"
 
 // TODO: manually resolve all these windows api calls
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 
