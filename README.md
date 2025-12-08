@@ -37,3 +37,9 @@ Based off of Athena: https://wikileaks.org/vault7/#Athena
    - calls payload.dll/engine.dll's DllMain(DLL_PROCESS_ATTACH)
 - payload.dll/engine.dll
     - does whatever logic is defined in payload.dll/engine.dll
+
+### TODO?
+- thread hijacking
+- manual mapping
+- reflective loading
+- process hollowing (probably don't need this)
