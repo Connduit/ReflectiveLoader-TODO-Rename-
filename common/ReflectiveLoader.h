@@ -112,4 +112,10 @@ typedef struct _PEB {
 } PEB;
 */
 
+typedef struct
+{
+    WORD	offset : 12; // lower 12 bits
+    WORD	type : 4; // upper 4 bits
+} IMAGE_RELOC, *PIMAGE_RELOC;
+
 #endif
