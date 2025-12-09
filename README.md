@@ -58,4 +58,5 @@ Based off of Athena: https://wikileaks.org/vault7/#Athena
 ### Glossary
 - DLL Shell: a dll that can be ran as if it was shellcode (if you know how to run it). It is structurally a DLL but packaged and executed like sRDI shellcode. It is a DLL + metadata + loader code bundled into a custom module format that still "appears" as a normal dll on disk
 - reflective loading = manual mapping + finding the entry point within the pe file 
-- manual mapping = loading a DLL manually (by yourself) instead of letting Windows do it for u (via LoadLibrary) 
+- manual mapping = loading a DLL manually (by yourself) instead of letting Windows do it for u (via LoadLibrary)
+- TLS Callbacks: a function pointer stored in the PE file's .tls directory. The function pointer must point to a valid executable memory address. TLS Callbacks are for calling other functions before DllMain is called. A non-malicous example would be if the DLL has CRT functions, the compiler/linker might determine a TLS Callback is needed to initialize the CRT enviroment so the DLL has access to CRT functions (like printf) by the time DllMain is called
