@@ -128,9 +128,19 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	// copy over dos header, dos stub, and pe header into baseAddress?
 	
 	// NOTE: SizeOfHeaders is the size of all the headers (from DosHeader to SectionHeaders)
-	DWORD uiValueA = ((PIMAGE_NT_HEADERS)pNTHeader)->OptionalHeader.SizeOfHeaders; // TODO: rename uiValueA variable
-	ULONG_PTR uiValueB = rawImageBase; // store off address... libraryaddress is the address of where the target dll exist on the disk
-	ULONG_PTR uiValueC = baseAddress; // store off address... baseAddress is where we are trying to write our dll into the process we are injecting it into
+	//DWORD uiValueA = ((PIMAGE_NT_HEADERS)pNTHeader)->OptionalHeader.SizeOfHeaders; // TODO: rename uiValueA variable
+	DWORD sizeOfHeaders = ((PIMAGE_NT_HEADERS)pNTHeader)->OptionalHeader.SizeOfHeaders; // TODO: rename uiValueA variable
+
+	//ULONG_PTR uiValueB = rawImageBase; // store off address... libraryaddress is the address of where the target dll exist on the disk
+	ULONG_PTR rawImageBaseBuffer = rawImageBase; // store off address... libraryaddress is the address of where the target dll exist on the disk
+
+	//ULONG_PTR uiValueC = baseAddress; // store off address... baseAddress is where we are trying to write our dll into the process we are injecting it into
+	ULONG_PTR baseAddressBuffer = baseAddress;
+
+	while(sizeOfHeaders--)
+	{
+		*(BYTE *)baseAddressBuffer++ = *(BYTE *)rawImageBaseBuffer++;
+	}
 
 	// we get the number of sections in the pe file, so we can write each section into memory 
 	WORD nSections = pNTHeader->FileHeader.NumberOfSections;
@@ -142,70 +152,73 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	// header (these section headers point us to where its data lives).
 	// NOTE: the SectionHeader "block" in the PE file structure is a table of 
 	// every section's (of the pe file) header 
-	uiValueA = ( (ULONG_PTR)&(pNTHeader)->OptionalHeader + pNTHeader->FileHeader.SizeOfOptionalHeader);
-	DWORD uiValueD;
+	sizeOfHeaders = ( (ULONG_PTR)&(pNTHeader)->OptionalHeader + pNTHeader->FileHeader.SizeOfOptionalHeader);
+	//DWORD uiValueD;
+	DWORD sizeofRawData;
 	// NOTE: loop through all the sections in the pe file
 	while (nSections--)
 	{
 
-		// uiValueC if the VA for this sections data
+		// baseAddressBuffer if the VA for this sections data
 		// NOTE: gets the address of the section's data we want to copy (this is the src)
-		uiValueC = (rawImageBase + ((PIMAGE_SECTION_HEADER)uiValueA)->PointerToRawData); 
+		baseAddressBuffer = (rawImageBase + ((PIMAGE_SECTION_HEADER)sizeOfHeaders)->PointerToRawData); 
 
 		// uiValueB is the VA for this section
 		// NOTE: gets the address of where we want to copy the section's data into (this is the destination)
-		uiValueB = (baseAddress + ((PIMAGE_SECTION_HEADER)uiValueA)->VirtualAddress);
+		rawImageBaseBuffer = (baseAddress + ((PIMAGE_SECTION_HEADER)sizeOfHeaders)->VirtualAddress);
 
 		// copy the section over
 		// NOTE: how many bytes we need to copy over (this is the section's size)
-		uiValueD = ((PIMAGE_SECTION_HEADER)uiValueA)->SizeOfRawData; // TODO: declare this variable outside the loop
+		sizeofRawData = ((PIMAGE_SECTION_HEADER)sizeOfHeaders)->SizeOfRawData; // TODO: declare this variable outside the loop
 
 		// NOTE: copy over the data for the section 1 byte at a time
-		while(uiValueD--)
+		while(sizeofRawData--)
 		{
-			*(BYTE *)uiValueB++ = *(BYTE *)uiValueC++;
+			*(BYTE *)rawImageBaseBuffer++ = *(BYTE *)baseAddressBuffer++;
 		}
 
 		// get the VA of the next section
-		uiValueA += sizeof(IMAGE_SECTION_HEADER);
+		sizeOfHeaders += sizeof(IMAGE_SECTION_HEADER);
 	}
 
 	//uiValueB = the address of the import directory
 	// NOTE: at this point, uiValueB is gonna look like this: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
-	uiValueB = (ULONG_PTR)&(pNTHeader)->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+	rawImageBaseBuffer = (ULONG_PTR)&(pNTHeader)->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
 
 	// we assume their is an import table to process
 	// uiValueC is the first entry in the import table
 	// NOTE: uiValueC should now point to PIMAGE_IMPORT_DESCRIPTOR
-	uiValueC = ( baseAddress + ((PIMAGE_DATA_DIRECTORY)uiValueB)->VirtualAddress); // TODO: use different variable here
+	baseAddressBuffer = ( baseAddress + ((PIMAGE_DATA_DIRECTORY)rawImageBaseBuffer)->VirtualAddress); // TODO: use different variable here
 
 	ULONG_PTR importModuleBase;
+	DWORD iatAddress;
 	// itterate through all imports
 	// NOTE: Name is an RVA to the name as a string
 	// NOTE: we can do this because the import table is NULL-terminated by an array of IMAGE_IMPORT_DESCRIPTOR
 	// NOTE: we're looping through all the imports because we're resolving all the imports/dlls that our 
 	// reflective dll depends on. (we're resolving by calling getprocaddress)
-	while (((PIMAGE_IMPORT_DESCRIPTOR)uiValueC)->Name)
+	while (((PIMAGE_IMPORT_DESCRIPTOR)baseAddressBuffer)->Name)
 	{
 		// use LoadLibraryA to load the imported module into memory
 		// NOTE: at this point, rawImageBase is no longer for the address where our reflective dll exists in memory
 		// in the process we injected into. now, rawImageBase will represent the the address of the dll's whos 
 		// functions we are trying to resolve 
-		importModuleBase = (ULONG_PTR)pLoadLibraryA((LPCSTR)(baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)uiValueC)->Name)); // NOTE: this variable was called rawImageBase (that's what the comments above are referring to)
+		importModuleBase = (ULONG_PTR)pLoadLibraryA((LPCSTR)(baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)baseAddressBuffer)->Name)); // NOTE: this variable was called rawImageBase (that's what the comments above are referring to)
 
 		// uiValueD = VA of the OriginalFirstThunk
 		// TODO: should be a ULONG_PTR? using a DWORD would break this when the dll is greater than 4gb (this should never happen tho)
-		DWORD uiValueD = (baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)uiValueC)->OriginalFirstThunk);
+		DWORD sizeofRawData = (baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)baseAddressBuffer)->OriginalFirstThunk);
 
 		// uiValueA = VA of the IAT (via first thunk not origionalfirstthunk)
-		uiValueA = (baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)uiValueC)->FirstThunk);
+		// TODO: rename to iatAddress
+		iatAddress = (baseAddress + ((PIMAGE_IMPORT_DESCRIPTOR)baseAddressBuffer)->FirstThunk);
 
 		// itterate through all imported functions, importing by ordinal if no name present
-		while (DEREF(uiValueA))
+		while (DEREF(iatAddress))
 		{
 			// sanity check uiValueD as some compilers only import by FirstThunk
 			// NOTE: i can remove this if block if ik for certain my compiler isn't only importing by first thunk
-			if (uiValueD && ((PIMAGE_THUNK_DATA)uiValueD)->u1.Ordinal & IMAGE_ORDINAL_FLAG)
+			if (sizeofRawData && ((PIMAGE_THUNK_DATA)sizeofRawData)->u1.Ordinal & IMAGE_ORDINAL_FLAG)
 			{
 				// get the VA of the modules NT Header
 				// TODO: type should be PIMAGE_NT_HEADERS, right? and variable name should be changed
@@ -227,27 +240,27 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 
 				// use the import ordinal (- export ordinal base) as an index into the array of addresses
 				//uiAddressArray += ((IMAGE_ORDINAL(((PIMAGE_THUNK_DATA)uiValueD)->u1.Ordinal) - ((PIMAGE_EXPORT_DIRECTORY)uiExportDir)->Base) * sizeof(DWORD));
-				uiAddressArray += ((IMAGE_ORDINAL(((PIMAGE_THUNK_DATA)uiValueD)->u1.Ordinal) - pExportDir->Base) * sizeof(DWORD));
+				uiAddressArray += ((IMAGE_ORDINAL(((PIMAGE_THUNK_DATA)sizeofRawData)->u1.Ordinal) - pExportDir->Base) * sizeof(DWORD));
 
 				// patch in the address for this imported function
-				DEREF(uiValueA) = (importModuleBase + DEREF_32(uiAddressArray));
+				DEREF(iatAddress) = (importModuleBase + DEREF_32(uiAddressArray));
 			}
 			else
 			{
 				// get the VA of this functions import by name struct
-				uiValueB = (baseAddress + DEREF(uiValueA));
+				rawImageBaseBuffer = (baseAddress + DEREF(iatAddress));
 
 				// use GetProcAddress and patch in the address for this imported function
-				DEREF(uiValueA) = (ULONG_PTR)pGetProcAddress((HMODULE)importModuleBase, (LPCSTR)((PIMAGE_IMPORT_BY_NAME)uiValueB)->Name);
+				DEREF(iatAddress) = (ULONG_PTR)pGetProcAddress((HMODULE)importModuleBase, (LPCSTR)((PIMAGE_IMPORT_BY_NAME)rawImageBaseBuffer)->Name);
 			}
 			// get the next imported function
-			uiValueA += sizeof(ULONG_PTR);
-			if (uiValueD)
-				uiValueD += sizeof(ULONG_PTR);
+			iatAddress += sizeof(ULONG_PTR);
+			if (sizeofRawData)
+				sizeofRawData += sizeof(ULONG_PTR);
 		}
 
 		// get the next import
-		uiValueC += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+		baseAddressBuffer += sizeof(IMAGE_IMPORT_DESCRIPTOR);
 	}
 	///////////////////////////////////////////////////////////
 	// NOTE: we don't need to check if the preferred image base is available because since
@@ -267,7 +280,7 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	// NOTE: get IMAGE_DATA_DIRECTORY for relocation table. uiValueB is type _IMAGE_DATA_DIRECTORY
 	// which has a field called VirtualAddress which gives a relative address to the relocation table
 	// relative to the image base
-	uiValueB = (ULONG_PTR) & pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+	rawImageBaseBuffer = (ULONG_PTR) & pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
 
 	// NOTE: relocations are stored in relocation "blocks" IMAGE_BASE_RELOCATION. each
 	// relocation block contains a number of different relocations (which can be obtained from SizeOfBlock). 
@@ -275,54 +288,54 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	// needed one after another in a continguous block of memory
 
 	// check if their are any relocation blocks (IMAGE_BASE_RELOCATION) present
-	if (((PIMAGE_DATA_DIRECTORY)uiValueB)->Size)
+	if (((PIMAGE_DATA_DIRECTORY)rawImageBaseBuffer)->Size)
 	{
 		// uiValueC is now the first entry (IMAGE_BASE_RELOCATION)
-		uiValueC = (baseAddress + ((PIMAGE_DATA_DIRECTORY)uiValueB)->VirtualAddress);
+		baseAddressBuffer = (baseAddress + ((PIMAGE_DATA_DIRECTORY)rawImageBaseBuffer)->VirtualAddress);
 
 		// and we itterate through all entries...
 		// NOTE: we can do this because windows api says the IMAGE_BASE_RELOCATION blocks are terminated
 		// by a NULL relocation block, meaning SizeOfBlock will be 0 when we want to stop looking/relocating
-		while (((PIMAGE_BASE_RELOCATION)uiValueC)->SizeOfBlock)
+		while (((PIMAGE_BASE_RELOCATION)baseAddressBuffer)->SizeOfBlock)
 		{
 			// uiValueA = the VA for this relocation block
-			uiValueA = (baseAddress + ((PIMAGE_BASE_RELOCATION)uiValueC)->VirtualAddress);
+			iatAddress = (baseAddress + ((PIMAGE_BASE_RELOCATION)baseAddressBuffer)->VirtualAddress);
 
 			// uiValueB = number of entries in this relocation block
-			uiValueB = (((PIMAGE_BASE_RELOCATION)uiValueC)->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(IMAGE_RELOC);
+			rawImageBaseBuffer = (((PIMAGE_BASE_RELOCATION)baseAddressBuffer)->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(IMAGE_RELOC);
 
 			// uiValueD is now the first entry in the current relocation block
-			uiValueD = uiValueC + sizeof(IMAGE_BASE_RELOCATION);
+			sizeofRawData = baseAddressBuffer + sizeof(IMAGE_BASE_RELOCATION);
 
 			// we itterate through all the entries in the current block...
-			while (uiValueB--)
+			while (rawImageBaseBuffer--)
 			{
 				// perform the relocation, skipping IMAGE_REL_BASED_ABSOLUTE as required.
 				// we dont use a switch statement to avoid the compiler building a jump table
 				// which would not be very position independent!
-				if (((PIMAGE_RELOC)uiValueD)->type == IMAGE_REL_BASED_DIR64) // relocations for 64bit only
+				if (((PIMAGE_RELOC)sizeofRawData)->type == IMAGE_REL_BASED_DIR64) // relocations for 64bit only
 				{
-					*(ULONG_PTR*)(uiValueA + ((PIMAGE_RELOC)uiValueD)->offset) += relocationDelta;
+					*(ULONG_PTR*)(iatAddress + ((PIMAGE_RELOC)sizeofRawData)->offset) += relocationDelta;
 				}
-				else if (((PIMAGE_RELOC)uiValueD)->type == IMAGE_REL_BASED_HIGHLOW) // relocations for 32bit only (if the dll is compiled in 32bit)
+				else if (((PIMAGE_RELOC)sizeofRawData)->type == IMAGE_REL_BASED_HIGHLOW) // relocations for 32bit only (if the dll is compiled in 32bit)
 				{
-					*(DWORD*)(uiValueA + ((PIMAGE_RELOC)uiValueD)->offset) += (DWORD)relocationDelta;
+					*(DWORD*)(iatAddress + ((PIMAGE_RELOC)sizeofRawData)->offset) += (DWORD)relocationDelta;
 				}
-				else if (((PIMAGE_RELOC)uiValueD)->type == IMAGE_REL_BASED_HIGH) // TODO: remove this? this is only needed in very old legacy 32bit relocations
+				else if (((PIMAGE_RELOC)sizeofRawData)->type == IMAGE_REL_BASED_HIGH) // TODO: remove this? this is only needed in very old legacy 32bit relocations
 				{
-					*(WORD*)(uiValueA + ((PIMAGE_RELOC)uiValueD)->offset) += HIWORD(relocationDelta);
+					*(WORD*)(iatAddress + ((PIMAGE_RELOC)sizeofRawData)->offset) += HIWORD(relocationDelta);
 				}
-				else if (((PIMAGE_RELOC)uiValueD)->type == IMAGE_REL_BASED_LOW) // TODO: remove this? this is only needed in very old legacy 32bit relocations
+				else if (((PIMAGE_RELOC)sizeofRawData)->type == IMAGE_REL_BASED_LOW) // TODO: remove this? this is only needed in very old legacy 32bit relocations
 				{
-					*(WORD*)(uiValueA + ((PIMAGE_RELOC)uiValueD)->offset) += LOWORD(relocationDelta);
+					*(WORD*)(iatAddress + ((PIMAGE_RELOC)sizeofRawData)->offset) += LOWORD(relocationDelta);
 				}
 
 				// get the next entry in the current relocation block
-				uiValueD += sizeof(IMAGE_RELOC);
+				sizeofRawData += sizeof(IMAGE_RELOC);
 			}
 
 			// get the next entry in the relocation directory
-			uiValueC = uiValueC + ((PIMAGE_BASE_RELOCATION)uiValueC)->SizeOfBlock;
+			baseAddressBuffer = baseAddressBuffer + ((PIMAGE_BASE_RELOCATION)baseAddressBuffer)->SizeOfBlock;
 		}
 	}
 	////////////////////////////////////
@@ -331,17 +344,18 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	// STEP 6: call our images entry point
 
 	// uiValueA = the VA of our newly loaded DLL/EXE's entry point
-	uiValueA = (baseAddress + pNTHeader->OptionalHeader.AddressOfEntryPoint);
+	//iatAddress = (baseAddress + pNTHeader->OptionalHeader.AddressOfEntryPoint); // TODO: rename variable
+	DWORD entryAddress = (baseAddress + pNTHeader->OptionalHeader.AddressOfEntryPoint); // TODO: rename variable
 
 	// We must flush the instruction cache to avoid stale code being used which was updated by our relocation processing.
 	pNtFlushInstructionCache((HANDLE)-1, NULL, 0);
 
 	// call our respective entry point, fudging our hInstance value
 	// if we are injecting a DLL via LoadRemoteLibraryR we call DllMain and pass in our parameter (via the DllMain lpReserved parameter)
-	((DLLMAIN)uiValueA)((HINSTANCE)baseAddress, DLL_PROCESS_ATTACH, lpParameter);
+	((DLLMAIN)entryAddress)((HINSTANCE)baseAddress, DLL_PROCESS_ATTACH, lpParameter);
 
 	// STEP 8: return our new entry point address so whatever called us can call DllMain() if needed.
-	return uiValueA; 
+	return entryAddress; 
 
 }
 
