@@ -1,16 +1,16 @@
 # === Compiler and flags ===
-CC  := x86_64-w64-mingw32-gcc
-CXX := x86_64-w64-mingw32-g++
-CFLAGS   := -Wall -Wextra -O0 -g -Icommon
-CXXFLAGS := -std=c++17 -Wall -Wextra -O0 -g -Icommon
-LDFLAGS  := -shared
+CC      := x86_64-w64-mingw32-gcc
+CXX     := x86_64-w64-mingw32-g++
+CFLAGS  := -Wall -Wextra -O0 -g -Icommon
+CXXFLAGS:= -std=c++17 -Wall -Wextra -O0 -g -Icommon
+LDFLAGS := -shared
 
 # === Directory structure ===
-SRC_DIRS := installer common loader
-OBJ_DIR := obj
-BIN_DIR := bin
+SRC_DIRS := installer loader common
+OBJ_DIR  := obj
+BIN_DIR  := bin
 
-# === Source discovery (per directory) ===
+# === Source discovery ===
 INSTALLER_CSOURCES := $(wildcard installer/*.c)
 INSTALLER_CPPSOURCES := $(wildcard installer/*.cpp)
 
@@ -21,45 +21,47 @@ COMMON_CSOURCES := $(wildcard common/*.c)
 COMMON_CPPSOURCES := $(wildcard common/*.cpp)
 
 # === Object lists ===
+COMMON_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(COMMON_CSOURCES)) \
+			   $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPPSOURCES))
+
 INSTALLER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(INSTALLER_CSOURCES)) \
 				  $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(INSTALLER_CPPSOURCES)) \
-				  $(patsubst %.c,$(OBJ_DIR)/%.o,$(COMMON_CSOURCES)) \
-				  $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPPSOURCES))
+				  $(COMMON_OBJS)
 
 LOADER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LOADER_CSOURCES)) \
 			   $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(LOADER_CPPSOURCES)) \
-			   $(patsubst %.c,$(OBJ_DIR)/%.o,$(COMMON_CSOURCES)) \
-			   $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPPSOURCES))
+			   $(COMMON_OBJS)
 
 # === Output files ===
 INSTALLER_DLL := $(BIN_DIR)/installer.dll
 LOADER_DLL    := $(BIN_DIR)/loader.dll
 
-# === Default target builds both ===
+# === Default target builds both DLLs ===
 all: $(INSTALLER_DLL) $(LOADER_DLL)
 
 # === Build installer.dll ===
-$(INSTALLER_DLL): $(INSTALLER_OBJS) | $(BIN_DIR)
+$(INSTALLER_DLL): $(INSTALLER_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
 # === Build loader.dll ===
-$(LOADER_DLL): $(LOADER_OBJS) | $(BIN_DIR)
+$(LOADER_DLL): $(LOADER_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-# === Compile rules ===
-$(OBJ_DIR)/%.o: %.c | prepare_dirs
+# === Compile rules (handles subdirectories automatically) ===
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/%.o: %.cpp | prepare_dirs
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# === Directory creation ===
-prepare_dirs:
-	@mkdir -p $(BIN_DIR)
-	@for dir in $(SRC_DIRS); do mkdir -p $(OBJ_DIR)/$$dir; done
-
+# === Clean target ===
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all clean prepare_dirs
+# === PHONY targets ===
+.PHONY: all clean
 
