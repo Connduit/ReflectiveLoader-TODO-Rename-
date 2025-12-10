@@ -140,7 +140,10 @@ DWORD WINAPI start(LPVOID lpParam) // TODO: change to be DWORD WINAPI start(LPVO
 
 		if (LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &priv.Privileges[0].Luid))
 		{
-			AdjustTokenPrivileges( hToken, FALSE, &priv, 0, NULL, NULL  );
+			if (AdjustTokenPrivileges(hToken, FALSE, &priv, 0, NULL, NULL) == FALSE)
+			{
+				MessageBoxA(NULL, "AdjustTokenPrivileges", "Debug", MB_OK);
+			}
 		}
 		CloseHandle(hToken);
 	}

@@ -3,6 +3,8 @@
 #include "LoadLibraryManual.h"
 
 
+#include <stdio.h>
+
 
 //extern "C"
 DWORD Rva2Offset(DWORD dwRva, UINT_PTR dllBaseAddress)
@@ -70,16 +72,16 @@ DWORD Rva2Offset(DWORD dwRva, UINT_PTR dllBaseAddress)
  * */
 
 //extern "C"
-DWORD GetReflectiveLoaderOffset(VOID * lpReflectiveDllBuffer)
+DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 {
+	MessageBoxA(NULL, "inside GetReflectiveLoaderOffset", "Debug", MB_OK);
 	UINT_PTR dllBaseAddress   = 0;
-	UINT_PTR uiBaseAddress   = 0;
 	UINT_PTR uiExportDir     = 0; // PIMAGE_EXPORT_DIRECTORY
 	UINT_PTR uiNameArray     = 0;
 	UINT_PTR uiAddressArray  = 0;
 	UINT_PTR uiNameOrdinals  = 0;
 	DWORD dwCounter          = 0;
-#ifdef WIN_X64
+#ifdef _WIN64
 	DWORD dwCompiledArch = 2;
 #else
 	// This will catch Win32 and WinRT.
@@ -99,32 +101,38 @@ DWORD GetReflectiveLoaderOffset(VOID * lpReflectiveDllBuffer)
 	// section headers
 
 
-	PIMAGE_NT_HEADERS pNTHeader = (PIMAGE_NT_HEADERS)(dllBaseAddress + ((PIMAGE_DOS_HEADER)dllBaseAddress)->e_lfanew);
-	DWORD dwExportDirRVA = pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
-	PIMAGE_EXPORT_DIRECTORY pExportDir = (PIMAGE_EXPORT_DIRECTORY)((UINT_PTR)dllBaseAddress + dwExportDirRVA);
+	//PIMAGE_NT_HEADERS pNTHeader = (PIMAGE_NT_HEADERS)(dllBaseAddress + ((PIMAGE_DOS_HEADER)dllBaseAddress)->e_lfanew);
+	//DWORD dwExportDirRVA = pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+	//PIMAGE_EXPORT_DIRECTORY pExportDir = (PIMAGE_EXPORT_DIRECTORY)((UINT_PTR)dllBaseAddress + dwExportDirRVA);
 
-
-	uiBaseAddress = (UINT_PTR)lpReflectiveDllBuffer;
 
 	// get the File Offset of the modules NT Header
-	uiExportDir = uiBaseAddress + ((PIMAGE_DOS_HEADER)uiBaseAddress)->e_lfanew;
+	uiExportDir = dllBaseAddress + ((PIMAGE_DOS_HEADER)dllBaseAddress)->e_lfanew;
 
 
 	// currenlty we can only process a PE file which is the same type as the one this fuction has
 	// been compiled as, due to various offset in the PE structures being defined at compile time.
 	// NOTE: there's no work around for this, it is absolute
-	if(pNTHeader->OptionalHeader.Magic == 0x010B) // PE32
+	if (((PIMAGE_NT_HEADERS)uiExportDir)->OptionalHeader.Magic == 0x010B) // PE32
 	{
-		if( dwCompiledArch != 1  )
+		if (dwCompiledArch != 1)
+		{
+			MessageBoxA(NULL, "32: return 0", "Debug", MB_OK);
 			return 0;
+		}
 	}
-	else if(pNTHeader->OptionalHeader.Magic == 0x020B) // PE64
+	else if (((PIMAGE_NT_HEADERS)uiExportDir)->OptionalHeader.Magic == 0x020B) // PE64
 	{
-		if( dwCompiledArch != 2  )
+		/*
+		if (dwCompiledArch != 2)
+		{
+			MessageBoxA(NULL, "64: return 0", "Debug", MB_OK);
 			return 0;
+		}*/
 	}
 	else
 	{
+		MessageBoxA(NULL, "Bad magic value", "Debug", MB_OK);
 		return 0;
 	}
 
@@ -132,36 +140,43 @@ DWORD GetReflectiveLoaderOffset(VOID * lpReflectiveDllBuffer)
 	uiNameArray = (UINT_PTR)&((PIMAGE_NT_HEADERS)uiExportDir)->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT  ];
 
 	// get the File Offset of the export directory
-	uiExportDir = uiBaseAddress + Rva2Offset( ((PIMAGE_DATA_DIRECTORY)uiNameArray)->VirtualAddress, uiBaseAddress  );
+	uiExportDir = dllBaseAddress + Rva2Offset( ((PIMAGE_DATA_DIRECTORY)uiNameArray)->VirtualAddress, dllBaseAddress  );
 
 	// get the File Offset for the array of name pointers
-	uiNameArray = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfNames, uiBaseAddress  );
+	uiNameArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfNames, dllBaseAddress  );
 
 	// get the File Offset for the array of addresses
-	uiAddressArray = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, uiBaseAddress  );
+	uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, dllBaseAddress  );
 
 	// get the File Offset for the array of name ordinals
-	uiNameOrdinals = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfNameOrdinals, uiBaseAddress  );
+	uiNameOrdinals = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfNameOrdinals, dllBaseAddress  );
 
 	// get a counter for the number of exported functions...
 	dwCounter = ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->NumberOfNames;
+
+	char buffer[256];
+	sprintf_s(buffer, sizeof(buffer), "Number of Names = %d", dwCounter);
+	MessageBoxA(NULL, buffer, "Debug", MB_OK);
 
 	// loop through all the exported functions to find the ReflectiveLoader
 	while( dwCounter--  )
 	{
 		// char* prodName = (char*)((ULONG_PTR)pModule + arrayOfNamesRVAs[i]); // dll loaded equivalent
-		char * cpExportedFunctionName = (char *)(uiBaseAddress + Rva2Offset( DEREF_32( uiNameArray  ), uiBaseAddress  ));
+		char * cpExportedFunctionName = (char *)(dllBaseAddress + Rva2Offset( DEREF_32( uiNameArray  ), dllBaseAddress  ));
+		MessageBoxA(NULL, cpExportedFunctionName, "Exported Function Name: ", MB_OK);
 
 		if( strstr( cpExportedFunctionName, "ReflectiveLoader"  ) != NULL  )
 		{
 			// get the File Offset for the array of addresses
-			uiAddressArray = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, uiBaseAddress  );
+			uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, dllBaseAddress  );
 
 			// use the functions name ordinal as an index into the array of name pointers
 			uiAddressArray += ( DEREF_16( uiNameOrdinals  ) * sizeof(DWORD)  );
 
+			MessageBoxA(NULL, "base address found for dll", "Debug", MB_OK);
+
 			// return the File Offset to the ReflectiveLoader() functions code...
-			return Rva2Offset( DEREF_32( uiAddressArray  ), uiBaseAddress  );
+			return Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
 		}
 		// get the next exported function name
 		uiNameArray += sizeof(DWORD);
@@ -188,6 +203,9 @@ HANDLE WINAPI LoadLibraryManual(
 	DWORD dwReflectiveLoaderOffset            = 0;
 	DWORD dwThreadId                          = 0;
 
+
+	MessageBoxA(NULL, "Inside LoadLibraryManaul()", "Debug", MB_OK);
+
 	// __try
 	// {
 		// NOTE: do while loop is so break statements exit immeditly?
@@ -197,18 +215,27 @@ HANDLE WINAPI LoadLibraryManual(
 				break;
 
 			// check if the library (lpBuffer) has a function called ReflectiveLoader
-			dwReflectiveLoaderOffset = GetReflectiveLoaderOffset(lpBuffer);
-			if( !dwReflectiveLoaderOffset  )
+			dwReflectiveLoaderOffset = GetReflectiveLoaderOffset(lpBuffer); // TODO: fails here
+			if (!dwReflectiveLoaderOffset)
+			{
+				MessageBoxA(NULL, "GetReflectiveLoaderOffset fails", "Debug", MB_OK);
 				break;
+			}
 
 			// alloc memory (RWX) in the host process for the image...
 			lpRemoteLibraryBuffer = VirtualAllocEx(hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-			if( !lpRemoteLibraryBuffer  )
+			if (!lpRemoteLibraryBuffer)
+			{
+				MessageBoxA(NULL, "VirtualAllocEx fails", "Debug", MB_OK);
 				break;
+			}
 
 			// write the image into the host process...
-			if( !WriteProcessMemory(hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL  )  )
+			if (!WriteProcessMemory(hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL))
+			{
+				MessageBoxA(NULL, "WriteProcessMemory fails", "Debug", MB_OK);
 				break;
+			}
 
 			// add the offset to ReflectiveLoader() to the remote library address...
 			lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset  );
@@ -218,6 +245,10 @@ HANDLE WINAPI LoadLibraryManual(
 			// if the parameter is 0, it will use the default stack size
 			// TODO: instead of creating a remote thread here, hijack a thread instead? 
 			hThread = CreateRemoteThread(hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
+			if (!hThread)
+			{
+				MessageBoxA(NULL, "CreateRemoteThread fails", "Debug", MB_OK);
+			}
 
 
 		} while( 0  );
