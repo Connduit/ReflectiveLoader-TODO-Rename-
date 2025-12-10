@@ -1,41 +1,55 @@
 # === Compiler and flags ===
 CC  := x86_64-w64-mingw32-gcc
 CXX := x86_64-w64-mingw32-g++
-# STRICT_CFLAGS := -Wall -Wextra -Wpointer-arith -Wpointer-sign -Wconversion -Wcast-align -O0 -g -Icommon
-CFLAGS := -Wall -Wextra -O0 -g -Icommon
+CFLAGS   := -Wall -Wextra -O0 -g -Icommon
 CXXFLAGS := -std=c++17 -Wall -Wextra -O0 -g -Icommon
-LDFLAGS := -shared
+LDFLAGS  := -shared
 
 # === Directory structure ===
 SRC_DIRS := installer common loader
 OBJ_DIR := obj
 BIN_DIR := bin
 
-# === Source file discovery ===
-C_SOURCES   := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
-CPP_SOURCES := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
+# === Source discovery (per directory) ===
+INSTALLER_CSOURCES := $(wildcard installer/*.c)
+INSTALLER_CPPSOURCES := $(wildcard installer/*.cpp)
 
-# === Object file generation (mirrors directory structure) ===
-C_OBJS   := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SOURCES))
-CPP_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CPP_SOURCES))
+LOADER_CSOURCES := $(wildcard loader/*.c)
+LOADER_CPPSOURCES := $(wildcard loader/*.cpp)
 
-OBJS := $(C_OBJS) $(CPP_OBJS)
+COMMON_CSOURCES := $(wildcard common/*.c)
+COMMON_CPPSOURCES := $(wildcard common/*.cpp)
 
-# === Output DLL ===
+# === Object lists ===
+INSTALLER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(INSTALLER_CSOURCES)) \
+				  $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(INSTALLER_CPPSOURCES)) \
+				  $(patsubst %.c,$(OBJ_DIR)/%.o,$(COMMON_CSOURCES)) \
+				  $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPPSOURCES))
+
+LOADER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LOADER_CSOURCES)) \
+			   $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(LOADER_CPPSOURCES)) \
+			   $(patsubst %.c,$(OBJ_DIR)/%.o,$(COMMON_CSOURCES)) \
+			   $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPPSOURCES))
+
+# === Output files ===
 INSTALLER_DLL := $(BIN_DIR)/installer.dll
+LOADER_DLL    := $(BIN_DIR)/loader.dll
 
-# === Default target ===
-all: $(INSTALLER_DLL)
+# === Default target builds both ===
+all: $(INSTALLER_DLL) $(LOADER_DLL)
 
-# === Build DLL ===
-$(INSTALLER_DLL): $(OBJS) | $(BIN_DIR)
-	$(CXX) $(LDFLAGS) $(OBJS) -o $@
+# === Build installer.dll ===
+$(INSTALLER_DLL): $(INSTALLER_OBJS) | $(BIN_DIR)
+	$(CXX) $(LDFLAGS) $^ -o $@
 
-# === Compile C source ===
+# === Build loader.dll ===
+$(LOADER_DLL): $(LOADER_OBJS) | $(BIN_DIR)
+	$(CXX) $(LDFLAGS) $^ -o $@
+
+# === Compile rules ===
 $(OBJ_DIR)/%.o: %.c | prepare_dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# === Compile C++ source ===
 $(OBJ_DIR)/%.o: %.cpp | prepare_dirs
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -44,7 +58,6 @@ prepare_dirs:
 	@mkdir -p $(BIN_DIR)
 	@for dir in $(SRC_DIRS); do mkdir -p $(OBJ_DIR)/$$dir; done
 
-# === Cleanup ===
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 

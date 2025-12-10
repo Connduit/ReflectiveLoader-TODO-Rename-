@@ -22,6 +22,8 @@
 HINSTANCE hAppInstance = NULL;
 
 
+#if defined(_MSC_VER)
+
 #pragma intrinsic( _ReturnAddress ) // MSVC only
 // __builtin_return_address(0); // GCC/MinGW equivalent?
 
@@ -30,6 +32,19 @@ HINSTANCE hAppInstance = NULL;
 // RIP relative addressing in this instance but I dont believe we can do so with the compiler intrinsics 
 // available (and no inline asm available under x64).
 __declspec(noinline) ULONG_PTR caller(VOID) { return (ULONG_PTR)_ReturnAddress(); }
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+// MinGW/GCC Version for caller()
+__attribute__((noinline)) ULONG_PTR caller(void)
+{
+	    return (ULONG_PTR)__builtin_return_address(0);
+}
+
+#else
+	#error Unsupported Compiler
+#endif
+
 
 
 // ReflectiveLoader() function that external stager calls
@@ -62,7 +77,7 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 			if (ntHeaderOffset >= sizeof(IMAGE_DOS_HEADER) && ntHeaderOffset < 1024)
 			{
 				//pNTHeader += uiLibraryAddress; // NOTE: now pNTHeader actually becomes a PIMAGE_NT_HEADERS
-				pNTHeader = uiLibraryAddress + ntHeaderOffset;
+				pNTHeader = (PIMAGE_NT_HEADERS)(uiLibraryAddress + ntHeaderOffset);
 				// break if we have found a valid MZ/PE header
 				if (pNTHeader->Signature == IMAGE_NT_SIGNATURE)
 				{
@@ -87,17 +102,17 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 	HMODULE kernel32_module = GetModuleHandleManual(L"kernel32.dll");
 	HMODULE ntdll_module = GetModuleHandleManual(L"ntdll.dll");
 
-	LOADLIBRARYA pLoadLibraryA = GetProcAddressManual(kernel32_module, "LoadLibraryA");
+	LOADLIBRARYA pLoadLibraryA = (LOADLIBRARYA)GetProcAddressManual(kernel32_module, "LoadLibraryA");
 
 	// TODO: is this one needed or can i just use GetProcAddressManual? i think i can just use manual
-	GETPROCADDRESS pGetProcAddress = GetProcAddressManual(kernel32_module, "GetProcAddress");
-	VIRTUALALLOC pVirtualAlloc = GetProcAddressManual(kernel32_module, "VirtualAlloc");
-	NTFLUSHINSTRUCTIONCACHE pNtFlushInstructionCache = GetProcAddressManual(kernel32_module, "NtFlushInstructionCache");
+	GETPROCADDRESS pGetProcAddress = (GETPROCADDRESS)GetProcAddressManual(kernel32_module, "GetProcAddress");
+	VIRTUALALLOC pVirtualAlloc = (VIRTUALALLOC)GetProcAddressManual(kernel32_module, "VirtualAlloc");
+	NTFLUSHINSTRUCTIONCACHE pNtFlushInstructionCache = (NTFLUSHINSTRUCTIONCACHE)GetProcAddressManual(kernel32_module, "NtFlushInstructionCache");
 
 	////////////////////////////////////////////////
 
 
-	pNTHeader = uiLibraryAddress + ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew;
+	pNTHeader = (PIMAGE_NT_HEADERS)((ULONG_PTR)uiLibraryAddress + ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew);
 
 
 
@@ -192,7 +207,7 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 				// get the VA of the modules NT Header
 				// TODO: type should be PIMAGE_NT_HEADERS, right? and variable name should be changed
 				//uiExportDir = uiLibraryAddress + ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew;
-				PIMAGE_NT_HEADERS importedNtHeader = uiLibraryAddress + ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew;
+				PIMAGE_NT_HEADERS importedNtHeader = (PIMAGE_NT_HEADERS)((ULONG_PTR)uiLibraryAddress + ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew);
 
 				// uiNameArray = the address of the modules export directory entry
 				//uiNameArray = (ULONG_PTR) & ((PIMAGE_NT_HEADERS)uiExportDir)->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
@@ -200,7 +215,7 @@ DLLEXPORT ULONG_PTR WINAPI ReflectiveLoader(LPVOID lpParameter)
 
 				// get the VA of the export directory
 				//uiExportDir = (uiLibraryAddress + ((PIMAGE_DATA_DIRECTORY)uiNameArray)->VirtualAddress);
-				PIMAGE_EXPORT_DIRECTORY pExportDir = uiLibraryAddress + dwExportDirRVA; // TODO: cast to correct types
+				PIMAGE_EXPORT_DIRECTORY pExportDir = (PIMAGE_EXPORT_DIRECTORY)((ULONG_PTR)uiLibraryAddress + dwExportDirRVA); // TODO: cast to correct types
 
 				// get the VA for the array of addresses
 				//uiAddressArray = (uiLibraryAddress + ((PIMAGE_EXPORT_DIRECTORY)uiExportDir)->AddressOfFunctions);
