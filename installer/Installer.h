@@ -1,6 +1,7 @@
 #ifndef ADRENOCHROME_INSTALLER_H
 #define ADRENOCHROME_INSTALLER_H
 
-void start();
+DWORD WINAPI start(LPVOID lpParam);
 
 #endif // ADRENOCHROME_INSTALLER_H
+

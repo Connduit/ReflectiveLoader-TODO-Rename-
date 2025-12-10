@@ -156,6 +156,9 @@
     <ClCompile Include="..\common\LoadLibraryManual.c" />
     <ClCompile Include="..\installer\Installer.c" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\installer\installer.ps1" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
