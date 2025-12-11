@@ -181,13 +181,13 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	// NOTE: this is an array of RVAs where each rva helps give an  exported function's name (as a literal char* )
 	// TODO: rename var
 	uiNameArray = dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNames, dllBaseAddress);
-	DWORD* arrayOfNamesRVAs = dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNames, dllBaseAddress);
+	DWORD* arrayOfNamesRVAs = (DWORD*)(dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNames, dllBaseAddress));
 
 	// get the File Offset for the array of addresses
 	// NOTE: this is an array of RVAs where each rva helps give an address to a specific exported function
 	// TODO: rename var
 	uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfFunctions, dllBaseAddress  );
-	DWORD* arrayOfFunctionRVAs = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfFunctions, dllBaseAddress  );
+	DWORD* arrayOfFunctionRVAs = (DWORD*)(dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfFunctions, dllBaseAddress));
 
 	// get the File Offset for the array of name ordinals
 	// NOTE: gets the rva to help get each ordinal index value to tell which AddressOfNames value goes with which AddressOfFunctions value
@@ -195,7 +195,7 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	// index 4. The oridinal index it what tells us to use index 4
 	// TODO: rename var?
 	uiNameOrdinals = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfNameOrdinals, dllBaseAddress  );
-	WORD* arrayOfNameOrdinals = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfNameOrdinals, dllBaseAddress  );
+	WORD* arrayOfNameOrdinals = (WORD*)(dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNameOrdinals, dllBaseAddress));
 
 	// get a counter for the number of exported functions...
 	//DWORD dwCounter = ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->NumberOfNames;
@@ -330,7 +330,6 @@ HANDLE WINAPI LoadLibraryManual(
 				MessageBoxA(NULL, "VirtualAllocEx fails", "Debug", MB_OK);
 				break;
 			}
-			MessageBoxA(NULL, "After virtualalloc", "Debug", MB_OK);
 
 			// write the image into the host process...
 			if (!WriteProcessMemory(hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL))
@@ -338,23 +337,20 @@ HANDLE WINAPI LoadLibraryManual(
 				MessageBoxA(NULL, "WriteProcessMemory fails", "Debug", MB_OK);
 				break;
 			}
-			MessageBoxA(NULL, "After writeprocessmemory", "Debug", MB_OK);
 
 			// add the offset to ReflectiveLoader() to the remote library address...
 			lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset  );
 			MessageBoxA(NULL, "After pointer arithmetic", "Debug", MB_OK);
-
-			DWORD before = 0xDEADBEEF;
-			MessageBoxA(NULL, "Before CreateRemoteThread", "DEBUG", MB_OK);
-
 
 
 			// create a remote thread in the host process to call the ReflectiveLoader!
 			// 1024*1024 bytes == 1MB which represents the stack size of the new thread
 			// if the parameter is 0, it will use the default stack size
 			// TODO: instead of creating a remote thread here, hijack a thread instead? 
-			hThread = CreateRemoteThread(hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
+			//hThread = CreateRemoteThread(hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
+			hThread = CreateRemoteThread(hProcess, NULL, 0, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
 
+			/*
 			char dbg[256];
 			sprintf_s(dbg, sizeof dbg,
 				"LOADER\nlocal base=%p\nremote base=%p\nreflective RVA=%X\nthread entry=%p",
@@ -364,7 +360,7 @@ HANDLE WINAPI LoadLibraryManual(
 				lpReflectiveLoader
 			);
 			MessageBoxA(NULL, dbg, "DEBUG", MB_OK);
-
+			*/
 
 			/*
 			DWORD after = before;

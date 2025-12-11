@@ -18,6 +18,9 @@
 #include "GetModuleHandleManual.h"
 #include "GetProcAddressManual.h"
 
+#include <intrin.h>
+
+
 // Our loader will set this to a pseudo correct HINSTANCE/HMODULE value
 HINSTANCE hAppInstance = NULL;
 
