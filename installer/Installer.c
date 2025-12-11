@@ -12,62 +12,36 @@
 
 #include <tlhelp32.h>
 // NOTE: temp helper function for debugging
-DWORD GetPIDByName(const char* processName)
+#include <tchar.h>
+
+
+DWORD GetPidFromName(const wchar_t* name)
 {
-	PROCESSENTRY32 pe;
-	pe.dwSize = sizeof(PROCESSENTRY32);
+	PROCESSENTRY32W pe;
+	pe.dwSize = sizeof(PROCESSENTRY32W);
 
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hSnapshot == INVALID_HANDLE_VALUE)
-		return 0;
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (hSnap == INVALID_HANDLE_VALUE) return 0;
 
-	if (Process32First(hSnapshot, &pe))
+	if (!Process32FirstW(hSnap, &pe))
 	{
-		do
-		{
-			if (_stricmp(pe.szExeFile, processName) == 0)
-			{
-				DWORD pid = pe.th32ProcessID;
-				CloseHandle(hSnapshot);
-				return pid;
-			}
-		} while (Process32Next(hSnapshot, &pe));
+		CloseHandle(hSnap);
+		return 0;
 	}
 
-	CloseHandle(hSnapshot);
+	do
+	{
+		if (_wcsicmp(pe.szExeFile, name) == 0)
+		{
+			DWORD pid = pe.th32ProcessID;
+			CloseHandle(hSnap);
+			return pid;
+		}
+	} while (Process32NextW(hSnap, &pe));
+
+	CloseHandle(hSnap);
 	return 0;
 }
-
-#include <windows.h>
-#include <stdio.h>
-
-static void dbg_str(const char* msg)
-{
-	OutputDebugStringA(msg);
-}
-
-static void dbg_f(const char* fmt, ...)
-{
-	char buf[512];
-	va_list ap;
-	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
-	va_end(ap);
-	OutputDebugStringA(buf);
-
-	// append to file for persistent trace
-	HANDLE hf = CreateFileA("C:\\temp\\installer_debug.log",
-		FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS,
-		FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hf != INVALID_HANDLE_VALUE)
-	{
-		DWORD written = 0;
-		SetFilePointer(hf, 0, NULL, FILE_END);
-		WriteFile(hf, buf, (DWORD)strlen(buf), &written, NULL);
-		CloseHandle(hf);
-	}
-}
-
 
 
 
@@ -92,10 +66,12 @@ DWORD WINAPI start(LPVOID lpParam) // TODO: change to be DWORD WINAPI start(LPVO
 	char* targetDll = "C:\\Users\\Connor\\Documents\\Code\\C++\\adrenochrome\\x64\\Debug\\loader.dll"; // host.dll
 
 	// process to inject host.dll into
-	const char* host_process = "notepad.exe";
+	//const char* host_process = "notepad.exe";
 	// obtain target process id... TODO: 
-	//DWORD dwProcessId = GetPIDByName(host_process);
-	DWORD dwProcessId = 33160;
+	//DWORD dwProcessId = GetPidFromName(host_process);
+	//DWORD dwProcessId = GetPidFromName(L"notepad.exe");
+	DWORD dwProcessId = GetPidFromName(L"mspaint.exe");
+	// DWORD dwProcessId = GetPidFromName(L"CalculatorApp.exe");
 
 	char buf[128]; // make sure the buffer is large enough
 	sprintf_s(buf, sizeof(buf), "PID = %lu", dwProcessId);
@@ -161,7 +137,7 @@ DWORD WINAPI start(LPVOID lpParam) // TODO: change to be DWORD WINAPI start(LPVO
 	// Calls LoadRemoteLibraryR to perform reflective DLL injection
 	// Loads targetDll into memory
 	//hModule = LoadRemoteLibraryR(hProcess, lpBuffer, dwLength, NULL);
-	HANDLE hModule = LoadLibraryManual(hProcess, lpBuffer, dwLength, NULL);
+	HANDLE hModule = LoadLibraryManual(hProcess, lpBuffer, dwLength, NULL); // TODO: rename
 	if (!hModule)
 	{
 		MessageBoxA(NULL, "LoadLibraryManual fails", "Debug", MB_OK);
@@ -181,6 +157,8 @@ DWORD WINAPI start(LPVOID lpParam) // TODO: change to be DWORD WINAPI start(LPVO
 	{
 		CloseHandle(hProcess);
 	}
+
+	return 0;
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,

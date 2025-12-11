@@ -391,6 +391,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_QUERY_HMODULE:
+		MessageBoxA(NULL, "Inside loader.dll::DLL_QUERY_HMODULE()", "Debug", MB_OK);
 		if (lpReserved != NULL)
 		{
 			*(HMODULE*)lpReserved = hAppInstance;
@@ -398,6 +399,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	case DLL_PROCESS_ATTACH:
 		// Initialize once for each new process.
 		// Return FALSE to fail DLL load.
+		MessageBoxA(NULL, "Inside loader.dll::DLL_PROCESS_ATTACH()", "Debug", MB_OK);
 		break;
 	case DLL_THREAD_ATTACH:
 		// Do thread-specific initialization.

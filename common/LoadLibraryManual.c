@@ -177,10 +177,6 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	// get a counter for the number of exported functions...
 	dwCounter = ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->NumberOfNames;
 
-	char buffer[256];
-	sprintf_s(buffer, sizeof(buffer), "Number of Names = %d", dwCounter);
-	MessageBoxA(NULL, buffer, "Debug", MB_OK);
-
 	// loop through all the exported functions to find the ReflectiveLoader
 	while( dwCounter--  )
 	{
@@ -191,15 +187,16 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 		if( strstr( cpExportedFunctionName, "ReflectiveLoader"  ) != NULL  )
 		{
 			// get the File Offset for the array of addresses
-			uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, dllBaseAddress  );
+			// TODO: this line is redundant, remove?
+			//uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, dllBaseAddress  );
 
 			// use the functions name ordinal as an index into the array of name pointers
 			uiAddressArray += ( DEREF_16( uiNameOrdinals  ) * sizeof(DWORD)  );
 
-			MessageBoxA(NULL, "base address found for dll", "Debug", MB_OK);
-
 			// return the File Offset to the ReflectiveLoader() functions code...
-			return Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
+			DWORD result = Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
+			return result;
+			//return Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
 		}
 		// get the next exported function name
 		uiNameArray += sizeof(DWORD);
@@ -279,11 +276,24 @@ HANDLE WINAPI LoadLibraryManual(
 			lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset  );
 			MessageBoxA(NULL, "After pointer arithmetic", "Debug", MB_OK);
 
+			DWORD before = 0xDEADBEEF;
+			MessageBoxA(NULL, "Before CreateRemoteThread", "DEBUG", MB_OK);
+
 			// create a remote thread in the host process to call the ReflectiveLoader!
 			// 1024*1024 bytes == 1MB which represents the stack size of the new thread
 			// if the parameter is 0, it will use the default stack size
 			// TODO: instead of creating a remote thread here, hijack a thread instead? 
 			hThread = CreateRemoteThread(hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, (DWORD)NULL, &dwThreadId);
+
+			DWORD after = before;
+			char dbg[256];
+			sprintf_s(dbg, sizeof(dbg),
+				"hThread=%p after=%u",
+				(void*)hThread,  // always cast HANDLE/pointer to void* for %p
+				(unsigned int)after);  // DWORD is fine as unsigned int for %u
+
+			MessageBoxA(NULL, dbg, "DEBUG", MB_OK);
+
 			if (!hThread)
 			{
 				MessageBoxA(NULL, "CreateRemoteThread fails", "Debug", MB_OK);
