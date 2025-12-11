@@ -104,7 +104,6 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	UINT_PTR uiNameArray     = 0;
 	UINT_PTR uiAddressArray  = 0;
 	UINT_PTR uiNameOrdinals  = 0;
-	DWORD dwCounter          = 0;
 #ifdef _WIN64
 	DWORD dwCompiledArch = 2;
 #else
@@ -167,7 +166,7 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 
 
 	// uiNameArray = the address of the modules export directory entry
-	//uiNameArray = (UINT_PTR)&((PIMAGE_NT_HEADERS)pNTHeader)->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT  ];
+	uiNameArray = (UINT_PTR)&((PIMAGE_NT_HEADERS)pNTHeader)->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT  ];
 
 	// NOTE: this is the rva for the Export Directory (PIMAGE_EXPORT_DIRECTORY)
 	DWORD dwExportDirRVA = pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
@@ -182,11 +181,13 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	// NOTE: this is an array of RVAs where each rva helps give an  exported function's name (as a literal char* )
 	// TODO: rename var
 	uiNameArray = dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNames, dllBaseAddress);
+	DWORD* arrayOfNamesRVAs = dllBaseAddress + Rva2Offset(((PIMAGE_EXPORT_DIRECTORY)pExportDir)->AddressOfNames, dllBaseAddress);
 
 	// get the File Offset for the array of addresses
 	// NOTE: this is an array of RVAs where each rva helps give an address to a specific exported function
 	// TODO: rename var
 	uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfFunctions, dllBaseAddress  );
+	DWORD* arrayOfFunctionRVAs = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfFunctions, dllBaseAddress  );
 
 	// get the File Offset for the array of name ordinals
 	// NOTE: gets the rva to help get each ordinal index value to tell which AddressOfNames value goes with which AddressOfFunctions value
@@ -194,11 +195,55 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 	// index 4. The oridinal index it what tells us to use index 4
 	// TODO: rename var?
 	uiNameOrdinals = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfNameOrdinals, dllBaseAddress  );
+	WORD* arrayOfNameOrdinals = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->AddressOfNameOrdinals, dllBaseAddress  );
 
 	// get a counter for the number of exported functions...
-	dwCounter = ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->NumberOfNames;
+	//DWORD dwCounter = ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->NumberOfNames;
+	DWORD numNames = ((PIMAGE_EXPORT_DIRECTORY )pExportDir)->NumberOfNames;
 
 	// loop through all the exported functions to find the ReflectiveLoader
+
+	DWORD targetFunctionAddress = NULL;
+	WORD targetFunctionAddressOffset = NULL;
+
+	for (DWORD i = 0; i < numNames; ++i)
+	{
+		char * cpExportedFunctionName = (char *)(dllBaseAddress + Rva2Offset( DEREF_32( uiNameArray  ), dllBaseAddress  ));
+		MessageBoxA(NULL, cpExportedFunctionName, "Exported Function Name: ", MB_OK);
+
+
+		char* prodName = (char*)((ULONG_PTR)dllBaseAddress + Rva2Offset(arrayOfNamesRVAs[i], dllBaseAddress));
+		if (strstr(prodName, "ReflectiveLoader") != NULL)
+		{
+			//uiAddressArray = dllBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, dllBaseAddress  );
+			//targetFunctionAddress = dllBaseAddress + Rva2Offset(arrayOfFunctionRVAs[arrayOfNameOrdinals[i]], dllBaseAddress);
+			targetFunctionAddressOffset = Rva2Offset(arrayOfFunctionRVAs[arrayOfNameOrdinals[i]], dllBaseAddress);
+
+			// use the functions name ordinal as an index into the array of name pointers
+			uiAddressArray += ( DEREF_16( uiNameOrdinals  ) * sizeof(DWORD)  );
+
+
+			// return the File Offset to the ReflectiveLoader() functions code...
+			DWORD result2 = Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
+
+			//DWORD result = Rva2Offset(DEREF_32(targetFunctionAddress), dllBaseAddress);
+			//DWORD result = Rva2Offset(targetFunctionAddress, dllBaseAddress);
+			return targetFunctionAddressOffset;
+			//return result;
+			//return Rva2Offset( DEREF_32( uiAddressArray  ), dllBaseAddress  );
+
+		}
+		// get the next exported function name
+		uiNameArray += sizeof(DWORD);
+
+		// get the next exported function name ordinal
+		uiNameOrdinals += sizeof(WORD);
+	}
+	MessageBoxA(NULL, "exiting func", "Debug", MB_OK);
+	
+
+
+	/*
 	while( dwCounter--  )
 	{
 		// char* prodName = (char*)((ULONG_PTR)pModule + arrayOfNamesRVAs[i]); // dll loaded equivalent
@@ -227,7 +272,7 @@ DWORD GetReflectiveLoaderOffset(VOID* lpReflectiveDllBuffer)
 		// get the next exported function name ordinal
 		uiNameOrdinals += sizeof(WORD);
 	}
-
+	*/
 	return 0;
 }
 
@@ -327,8 +372,6 @@ HANDLE WINAPI LoadLibraryManual(
 
 
 		} while( 0  );
-
-		MessageBoxA(NULL, "Success? End of LoadLibraryManual() function", "Debug", MB_OK);
 
 
 	return hThread;
